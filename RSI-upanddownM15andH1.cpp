@@ -16,20 +16,31 @@ input int rsiPeriod = 14; // RSI period for confirmation
 input int rsiBuyLevel = 30; // Buy RSI level (Overbought)
 input int rsiSellLevel = 70; // Sell RSI level (Oversold)
 
-// Global variables to track the previous RSI values
-double prevRsiM15, prevRsiM15Prev;
-double prevRsiH1, prevRsiH1Prev;
+// Global variables to track the previous RSI values for each symbol
+double prevRsiM15[], prevRsiM15Prev[], prevRsiH1[], prevRsiH1Prev[];
 int trendDetected = 0; // 0 = No trend, 1 = Uptrend, -1 = Downtrend
 
 // Initialization function
 int OnInit()
 {
-   // Initialize previous RSI values for both timeframes
-   prevRsiM15 = iRSI(Symbol(), PERIOD_M15, rsiPeriod, 1);
-   prevRsiM15Prev = iRSI(Symbol(), PERIOD_M15, rsiPeriod, 2);
+   // Initialize arrays for RSI values for each symbol
+   int totalSymbols = SymbolsTotal(true); // Get total number of symbols in the Market Watch
 
-   prevRsiH1 = iRSI(Symbol(), PERIOD_H1, rsiPeriod, 1);
-   prevRsiH1Prev = iRSI(Symbol(), PERIOD_H1, rsiPeriod, 2);
+   ArrayResize(prevRsiM15, totalSymbols);
+   ArrayResize(prevRsiM15Prev, totalSymbols);
+   ArrayResize(prevRsiH1, totalSymbols);
+   ArrayResize(prevRsiH1Prev, totalSymbols);
+
+   // Initialize RSI values for all symbols
+   for (int i = 0; i < totalSymbols; i++)
+   {
+      string symbol = SymbolName(i, true); // Get symbol name from the Market Watch
+      prevRsiM15[i] = iRSI(symbol, PERIOD_M15, rsiPeriod, 1);
+      prevRsiM15Prev[i] = iRSI(symbol, PERIOD_M15, rsiPeriod, 2);
+
+      prevRsiH1[i] = iRSI(symbol, PERIOD_H1, rsiPeriod, 1);
+      prevRsiH1Prev[i] = iRSI(symbol, PERIOD_H1, rsiPeriod, 2);
+   }
 
    return INIT_SUCCEEDED;
 }
@@ -37,59 +48,68 @@ int OnInit()
 // Main function
 void OnTick()
 {
-   // Check for second confirmed upward movement on M15 RSI
-   bool m15Upward = IsUpwardMovementRSI(PERIOD_M15, prevRsiM15, prevRsiM15Prev);
-   // Check for second confirmed upward movement on H1 RSI
-   bool h1Upward = IsUpwardMovementRSI(PERIOD_H1, prevRsiH1, prevRsiH1Prev);
-   
-   // If both timeframes have the same upward trend
-   if (m15Upward && h1Upward)
-   {
-      trendDetected = 1;  // Upward trend detected on both timeframes
-   }
-   // Check for second confirmed downward movement on M15 RSI
-   bool m15Downward = IsDownwardMovementRSI(PERIOD_M15, prevRsiM15, prevRsiM15Prev);
-   // Check for second confirmed downward movement on H1 RSI
-   bool h1Downward = IsDownwardMovementRSI(PERIOD_H1, prevRsiH1, prevRsiH1Prev);
+   // Get the total number of symbols in the Market Watch
+   int totalSymbols = SymbolsTotal(true);
 
-   // If both timeframes have the same downward trend
-   if (m15Downward && h1Downward)
+   // Loop through each symbol in the Market Watch
+   for (int i = 0; i < totalSymbols; i++)
    {
-      trendDetected = -1; // Downward trend detected on both timeframes
-   }
+      string symbol = SymbolName(i, true); // Get symbol name from the Market Watch
 
-   // Update RSI values for both timeframes
-   if (m15Upward || m15Downward)
-   {
-      prevRsiM15Prev = prevRsiM15;
-      prevRsiM15 = iRSI(Symbol(), PERIOD_M15, rsiPeriod, 1);  // Update M15 RSI values
-   }
-   
-   if (h1Upward || h1Downward)
-   {
-      prevRsiH1Prev = prevRsiH1;
-      prevRsiH1 = iRSI(Symbol(), PERIOD_H1, rsiPeriod, 1); // Update H1 RSI values
-   }
+      // Check for second confirmed upward movement on M15 RSI
+      bool m15Upward = IsUpwardMovementRSI(symbol, prevRsiM15[i], prevRsiM15Prev[i]);
+      // Check for second confirmed upward movement on H1 RSI
+      bool h1Upward = IsUpwardMovementRSI(symbol, prevRsiH1[i], prevRsiH1Prev[i]);
 
-   // Send email notification when trend is detected
-   if (trendDetected != 0)
-   {
-      string trend = trendDetected == 1 ? "Upward" : "Downward";
-      string subject = "RSI Trend Detected: " + trend + " Movement on " + Symbol();
-      string body = "A " + trend + " movement has been confirmed on both M15 and H1 timeframes for the currency pair " + Symbol();
-      SendMail(subject, body);
-      trendDetected = 0; // Reset the trend detection after sending email
+      // If both timeframes have the same upward trend
+      if (m15Upward && h1Upward)
+      {
+         trendDetected = 1;  // Upward trend detected on both timeframes
+      }
+      // Check for second confirmed downward movement on M15 RSI
+      bool m15Downward = IsDownwardMovementRSI(symbol, prevRsiM15[i], prevRsiM15Prev[i]);
+      // Check for second confirmed downward movement on H1 RSI
+      bool h1Downward = IsDownwardMovementRSI(symbol, prevRsiH1[i], prevRsiH1Prev[i]);
+
+      // If both timeframes have the same downward trend
+      if (m15Downward && h1Downward)
+      {
+         trendDetected = -1; // Downward trend detected on both timeframes
+      }
+
+      // Update RSI values for both timeframes for the current symbol
+      if (m15Upward || m15Downward)
+      {
+         prevRsiM15Prev[i] = prevRsiM15[i];
+         prevRsiM15[i] = iRSI(symbol, PERIOD_M15, rsiPeriod, 1);  // Update M15 RSI values
+      }
+
+      if (h1Upward || h1Downward)
+      {
+         prevRsiH1Prev[i] = prevRsiH1[i];
+         prevRsiH1[i] = iRSI(symbol, PERIOD_H1, rsiPeriod, 1); // Update H1 RSI values
+      }
+
+      // Send email notification when trend is detected
+      if (trendDetected != 0)
+      {
+         string trend = trendDetected == 1 ? "Upward" : "Downward";
+         string subject = "RSI Trend Detected: " + trend + " Movement on " + symbol;
+         string body = "A " + trend + " movement has been confirmed on both M15 and H1 timeframes for the currency pair " + symbol;
+         SendMail(subject, body);
+         trendDetected = 0; // Reset the trend detection after sending email
+      }
    }
 }
 
 // Function to check upward movement on RSI
-bool IsUpwardMovementRSI(int timeframe, double currentRsi, double prevRsi)
+bool IsUpwardMovementRSI(string symbol, double currentRsi, double prevRsi)
 {
    return (currentRsi > prevRsi);
 }
 
 // Function to check downward movement on RSI
-bool IsDownwardMovementRSI(int timeframe, double currentRsi, double prevRsi)
+bool IsDownwardMovementRSI(string symbol, double currentRsi, double prevRsi)
 {
    return (currentRsi < prevRsi);
 }
